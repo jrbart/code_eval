@@ -1,0 +1,40 @@
+#!/usr/bin/env python
+
+import os
+import sys
+
+wwpn = []
+
+for line in os.popen("./bcu"):
+    cols = line.split()
+    if len(cols) == 8:
+        lstatus = cols[6]
+        if lstatus == "Linkup":
+            wwpn.append(cols[3])
+
+interface = []
+letter = ord('a')
+
+for macs in wwpn:
+    interface.append("wwpn"+chr(letter)+" = "+macs)
+    letter +=1
+    
+def printasurl(intflist,server):
+    base = "http://code-sample.rack.com/"
+    app = "test.php"
+    server = "server="+server
+    linkup = "linkup="+str(len(intflist))
+    interfaces = ""
+    for intf in intflist:
+        interfaces += "&"+intf.replace(" ","")
+    print base+app+"?"+server+"&"+linkup+interfaces
+
+def printastable(intflist):
+    for intf in intflist:
+        print intf
+
+if len(sys.argv) > 1:
+    assert sys.argv[1] == "-s"
+    printasurl(interface,sys.argv[2])
+else:
+    printastable(interface)
