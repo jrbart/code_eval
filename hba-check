@@ -2,39 +2,71 @@
 
 import os
 import sys
+import argparse
 
-wwpn = []
+parser = argparse.ArgumentParser(description="Run the bcu command and parse\
+                                 the output into either a table or a URL.")
+parser.add_argument("-s", "--server",
+                    help="produce a url with the server number", type=int)
+args = parser.parse_args()
 
-for line in os.popen("./bcu"):
+# The output of bcu has 4 lines of header, followed by lines for each interface
+# Each line is 8 columns with "Linkup" in column 7 and the MAC in column 4
+# Example:
+# 1/0   -   fc    10:00:8c:7c:ff:16:fd:00  01e000    sw     Linkup      4G
+# 1/1   -   fc    10:00:8c:7c:ff:16:fd:01  --        --     Linkdown    ---
+
+
+def grab_linkup(line, accum):
+    """Add the MAC if the line is marked as Linkup"""
     cols = line.split()
-    if len(cols) == 8:
-        lstatus = cols[6]
-        if lstatus == "Linkup":
-            wwpn.append(cols[3])
+    if cols[6] == "Linkup":
+        accum.append(cols[3])
 
-interface = []
-letter = ord('a')
 
-for macs in wwpn:
-    interface.append("wwpn"+chr(letter)+" = "+macs)
-    letter +=1
-    
-def printasurl(intflist,server):
+def make_url(intflist, server):
+    """Make a URL listing the MACs in the list"""
     base = "http://code-sample.rack.com/"
     app = "test.php"
-    server = "server="+server
-    linkup = "linkup="+str(len(intflist))
+    server = "server=%d" % server
+    linkup = "linkup=%d" % len(intflist)
     interfaces = ""
     for intf in intflist:
-        interfaces += "&"+intf.replace(" ","")
-    print base+app+"?"+server+"&"+linkup+interfaces
+        interfaces += "&" + intf.replace(" ", "")  # squeeze out spaces
+    url = base + app + "?" + server + "&" + linkup + interfaces
+    return url
 
-def printastable(intflist):
-    for intf in intflist:
-        print intf
 
-if len(sys.argv) > 1:
-    assert sys.argv[1] == "-s"
-    printasurl(interface,sys.argv[2])
+def make_table(intflist):
+    """Make a table listing the MACs in the list"""
+    table = "\n".join(intflist)
+    return table
+
+
+# A list to hold the MACs
+wwpn = []
+
+# Run bcu and parse its output
+with os.popen('./bcu') as f:
+    for i, line in enumerate(f):
+        # skip over header
+        if i < 4:
+            continue
+        # skip last line
+        if line[:2] == "--":
+            continue
+        grab_linkup(line, wwpn)
+
+# Make a list of MACs like "wwpnX = MACADDR"
+interfaces = []
+letter = ord('a')
+for macs in wwpn:
+    interfaces.append("wwpn" + chr(letter) + " = " + macs)
+    letter += 1
+
+# Finally, output
+if args.server:
+    output = make_url(interfaces, args.server)
 else:
-    printastable(interface)
+    output = make_table(interfaces)
+print output
